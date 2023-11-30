@@ -1,84 +1,76 @@
+# -*- coding: utf-8 -*-
+
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-from sklearn.cluster import KMeans
-from sklearn.metrics import silhouette_score
 from sklearn.linear_model import LinearRegression
-from sklearn.metrics import mean_squared_error
+from sklearn.model_selection import train_test_split
+from sklearn.cluster import KMeans
 
-# Ruta del archivo csv
-df = pd.read_csv("trafico.csv")
+# Cargar y preparar los datos
+df = pd.read_csv("traffic.csv")
+df['DateTime'] = pd.to_datetime(df['DateTime'] + ' ' + df['Time'])
+df['year'] = df['DateTime'].dt.year
+df['month'] = df['DateTime'].dt.month
+df['day'] = df['DateTime'].dt.day
+df['hour'] = df['DateTime'].dt.hour
+df.drop(['DateTime', 'Time', 'Junction', 'ID'], axis=1, inplace=True)
 
-# Eliminar columnas innecesarias
-df.drop(["Operating airline IATA Code",
-        "Published Airline IATA Code", "Activity Type Code", "Cargo Type Code"],
-        axis=1, inplace=True)
-
-# Histograma de una columna
-plt.figure(figsize=(10, 6))
-plt.hist(df['Cargo Weight LBS'], bins=30, color='blue', edgecolor='black')
-plt.title('Distribucion del Peso de Carga (LBS)')
-plt.xlabel('Peso de Carga (LBS)')
-plt.ylabel('Frecuencia')
+# Visualización de datos para clustering
+plt.figure()
+sns.pairplot(df[['year', 'month', 'day', 'hour', 'Vehicles']])
 plt.show()
 
-# Grafico de dispersion entre dos variables
-plt.figure(figsize=(10, 6))
-sns.scatterplot(x='Cargo Weight LBS', y='Cargo Metric TONS', data=df)
-plt.title('Relacion entre Peso de Carga en LBS y Toneladas Metricas')
-plt.xlabel('Peso de Carga (LBS)')
-plt.ylabel('Peso de Carga (Toneladas Metricas)')
+# Implementación de K-means
+inertia = []
+for i in range(1, 11):
+    kmeans = KMeans(n_clusters=i, random_state=42)
+    kmeans.fit(df[['year', 'month', 'day', 'hour', 'Vehicles']])
+    inertia.append(kmeans.inertia_)
+
+plt.figure()
+plt.plot(range(1, 11), inertia)
+plt.title('Método del Codo')
+plt.xlabel('Número de clusters')
+plt.ylabel('Inertia')
 plt.show()
 
-
-
-silhouette_coefficients = []
-for k in range(2, 11):
-        kmeans = KMeans(n_clusters=k)
-        kmeans.fit(df[['Cargo Weight LBS', 'Cargo Metric TONS']])
-        score = silhouette_score(df[['Cargo Weight LBS', 'Cargo Metric TONS']], kmeans.labels_)
-        silhouette_coefficients.append(score)
-
-# Graficar los coeficientes de silueta
-plt.figure(figsize=(10, 6))
-plt.plot(range(2, 11), silhouette_coefficients)
-plt.xticks(range(2, 11))
-plt.xlabel("Numero de Clusters")
-plt.ylabel("Coeficiente de Silueta")
-plt.show()
-
-# asumiendo que el numero optimo de clusters es 'n', reemplaza 'n' con el numero correspondiente
-kmeans = KMeans(n_clusters=n)
-df['Cluster'] = kmeans.fit_predict(df[['Cargo Weight LBS', 'Cargo Metric TONS']])
+# Aplicar K-means con el número óptimo de clusters
+num_clusters = 3  # Reemplazar con el número óptimo encontrado
+kmeans = KMeans(n_clusters=num_clusters, random_state=42)
+df['cluster'] = kmeans.fit_predict(df[['year', 'month', 'day', 'hour', 'Vehicles']])
 
 # Visualizar los clusters
-plt.figure(figsize=(10, 6))
-sns.scatterplot(x='Cargo Weight LBS', y='Cargo Metric TONS', hue='Cluster', data=df, palette='viridis')
-plt.title('Clustering K-means de Peso de Carga')
-plt.xlabel('Peso de Carga (LBS)')
-plt.ylabel('Peso de Carga (Toneladas Metricas)')
+plt.figure()
+sns.scatterplot(x='hour', y='Vehicles', hue='cluster', data=df)
 plt.show()
 
-# Preparar los datos para la regresion
-X = df[['Cargo Weight LBS']]
-y = df['Cargo Metric TONS']
+# Preparación para regresión
+X = df[['year', 'month', 'day', 'hour']]
+y = df['Vehicles']
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-# Crear y entrenar el modelo de regresion lineal
-model = LinearRegression()
-model.fit(X, y)
-
-
-y_pred = model.predict(X)
-r2 = model.score(X, y)
-
-# Graficar la regresion lineal
-plt.figure(figsize=(10, 6))
-sns.scatterplot(x='Cargo Weight LBS', y='Cargo Metric TONS', data=df)
-plt.plot(X, y_pred, color='red')
-plt.title('Regresion Lineal de Peso de Carga')
-plt.xlabel('Peso de Carga (LBS)')
-plt.ylabel('Peso de Carga (Toneladas Metricas)')
-plt.show()
-
-
+# Regresión lineal
+modelo = LinearRegression()
+modelo.fit(X_train, y_train)
+y_pred = modelo.predict(X_test)
+r2 = modelo.score(X_test, y_test)
 print("Coeficiente de Determinacion (R2): {}".format(r2))
+
+# Visualización de la regresión
+plt.figure()
+plt.scatter(y_test, y_pred)
+plt.xlabel('Valores Reales')
+plt.ylabel('Predicciones')
+plt.title('Valores Reales vs. Predicciones')
+plt.show()
+
+# Predicción para una fecha y hora específica
+#print("Digite la fecha que desea predecir en el siguiente formato: Año, Mes, Día, Hora:")
+#year = int(input("Año: "))
+#month = int(input("Mes: "))
+#day = int(input("Día: "))
+#hour = int(input("Hora: "))
+
+prediccion = modelo.predict([[2023 ,10,10, 13]])
+print("Cantidad estimada de autos: {}".format(prediccion[0]))
